@@ -7,6 +7,7 @@ import color_pca
 from tqdm import trange
 from PIL import Image
 import matplotlib.pyplot as plt
+import io, zipfile
 
 # Streamlit UI
 st.title("DBL-GNG Image Augmentation")
@@ -27,6 +28,7 @@ elif input_option == "Kamera":
 if uploaded_files is not None:
     try:
         st.write(f"{len(uploaded_files)} Bilder hochgeladen:")
+        aug_output_images = []
         for uploaded_file in uploaded_files:
             image = Image.open(uploaded_file)
             # Überprüfen, ob das Bild im richtigen Modus ist (RGB)
@@ -92,6 +94,7 @@ if uploaded_files is not None:
 
                     # Das augmentierte Bild in der Liste speichern
                     all_images.append(aug_image)
+                    aug_output_images.append(aug_image.convert("RGB"))
 
                 except Exception as e:
                     st.write(f"Fehler bei der Augmentierung: {e}")  # Debugging
@@ -146,5 +149,30 @@ if uploaded_files is not None:
             plt.tight_layout()
             st.pyplot(fig)
 
+        if aug_output_images and len(aug_output_images) == constants.AUG_COUNT * len(uploaded_files):
+            zip_buffer = io.BytesIO()
+            name_index = 0
+            with zipfile.ZipFile(zip_buffer, "w") as zipf:
+                for i,img in enumerate(aug_output_images):
+                    #img = Image.open(file)
+                    if i % constants.AUG_COUNT == 0 and not i == 0:
+                        print(name_index)
+                        name_index += 1
+                    base_name = uploaded_files[name_index].name.rsplit('.', 1)[0]
+                    # Neuen, eindeutigen Namen setzen
+                    file_name = f"{base_name}_aug_{i % constants.AUG_COUNT}" + constants.FILE_TYPE 
+                    buf = io.BytesIO()
+                    img.save(buf, format="JPEG")
+                    zipf.writestr(file_name, buf.getvalue())
+                  
+
+            # Download-Button für das ZIP
+            st.download_button(
+                label="Downlaod augmented images as a zip file" ,
+                data=zip_buffer.getvalue(),
+                file_name="augmented_images.zip",
+                mime="application/zip"
+            )
+        
     except Exception as e:
         st.write(f"Fehler beim Öffnen des Bildes: {e}") # Debugging
