@@ -9,167 +9,162 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import io, zipfile
 
-# Streamlit UI
-st.title("DBL-GNG Image Augmentation")
+
+#st.set_page_config(page_title="DBL-GNG Image Augmentation", layout="wide")
+
+# --- Session-States initialisieren ---
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = None
+if "image_results" not in st.session_state:
+    st.session_state.image_results = {}  # {filename: {"original": Image, "aug_images": [...], "cluster_count": int, "data_shape": tuple}}
+if "fig" not in st.session_state:
+    st.session_state.fig = {}
+if "fig_png" not in st.session_state:
+    st.session_state.fig_png = {}
+
+# --- Streamlit UI ---
+st.title("🧠 DBL-GNG Image Augmentation")
 st.write("Lade ein oder mehrere Bilder hoch oder nimm eines mit der Kamera auf.")
 
-# Option zur Bildaufnahme oder Datei-Upload
+
+# --- Eingabeoption ---
 input_option = st.radio("Bildquelle auswählen:", ["Datei-Upload", "Kamera"])
 
 if input_option == "Datei-Upload":
     uploaded_files = st.file_uploader(
-    "Bilder auswählen", 
-    type=["jpg", "jpeg", "png"], 
-    accept_multiple_files=True
-)
+        "Bilder auswählen", 
+        type=["jpg", "jpeg", "png"], 
+        accept_multiple_files=True
+    )
 elif input_option == "Kamera":
     uploaded_files = st.camera_input("Bild aufnehmen")
 
-if uploaded_files is not None:
-    try:
-        st.write(f"{len(uploaded_files)} Bilder hochgeladen:")
-        aug_output_images = []
-        for uploaded_file in uploaded_files:
-            image = Image.open(uploaded_file)
-            # Überprüfen, ob das Bild im richtigen Modus ist (RGB)
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
+if uploaded_files:
+    st.session_state.uploaded_files = uploaded_files
 
-            # Bildgröße anzeigen
-            st.write(f"Bildgröße: {image.size}")
 
-            # Bild in ein NumPy-Array umwandeln und sicherstellen, dass es die richtige Form hat (n_pixels, n_features)
-            image_array = np.asarray(image)
-            data_array = image_array.reshape(-1, 3) / constants.MAX_COLOR_VALUE  # Normalisiere die Daten zur Weiterverarbeitung (wie in parser.py); reshape besser als vstack
+# --- Caching für teure Berechnung ---
+@st.cache_data(show_spinner=False)
+def generate_augmentations(image_data, size):
+    """Führt den gesamten DBL-GNG + Clustering + Augmentierungsprozess durch."""
+    gng = dbl_gng.DBL_GNG(3, constants.MAX_NODES)
+    gng.initializeDistributedNode(image_data, constants.SARTING_NODES)
 
-            st.write(f"Bildarray Form: {data_array.shape}") ### Debugging: Gibt die Form des Bildarrays aus ###
+    for i in trange(constants.EPOCH, desc="Training GNG"):
+        gng.resetBatch()
+        gng.batchLearning(image_data)
+        gng.updateNetwork()
+        gng.addNewNode(gng)
 
-            # Initialisierung von DBL-GNG für die Augmentierung
-            gng = dbl_gng.DBL_GNG(3, constants.MAX_NODES)  # GNG mit 3 Dimensionen und MAX_NODES
-            gng.initializeDistributedNode(data_array, constants.SARTING_NODES)  # Initialisiere verteilte Knoten mit den Bilddaten
+    gng.cutEdge()
+    gng.finalNodeDatumMap(image_data)
 
-            # Training des GNG-Modells
-            bar = trange(constants.EPOCH)  # Fortschrittsbalken für Trainingsepochen
-            for i in bar:
-                gng.resetBatch()  # Zurücksetzen des Batch-Trainings
-                gng.batchLearning(data_array)  # Batch-Lernen
-                gng.updateNetwork()  # Netzwerk aktualisieren
-                gng.addNewNode(gng)  # Neuen Knoten hinzufügen
-                bar.set_description(f"Epoch {i + 1} Knotenanzahl: {len(gng.W)}")  # Fortschrittsanzeige
+    finalDistMap = gng.finalDistMap
+    finalNodes = (gng.W * constants.MAX_COLOR_VALUE).astype(int)
+    connectiveMatrix = gng.C
 
-            gng.cutEdge()  # Entferne nicht benötigte Kanten im Netzwerk
-            gng.finalNodeDatumMap(data_array)  # Finales Mapping der Knoten zu den Datenpunkten
+    pixel_cluster_map, node_cluster_map = clustering.cluster(finalDistMap, finalNodes, connectiveMatrix)
+    pixel_cluster_map = np.array(pixel_cluster_map)
+    cluster_count = int(max(node_cluster_map)) + 1
 
-            # Abrufen der finalen Distanzmatrix und Knoten
-            finalDistMap = gng.finalDistMap
-            finalNodes = (gng.W * constants.MAX_COLOR_VALUE).astype(int)  # Berechne finale Knoten und skaliere
-            connectiveMatrix = gng.C  # Verbindungs-Matrix zwischen Knoten
-            pixel_cluster_map, node_cluster_map = clustering.cluster(finalDistMap, finalNodes, connectiveMatrix)
-            pixel_cluster_map = np.array(pixel_cluster_map)  # Clustering durchführen
+    aug_images = []
+    for _ in range(constants.AUG_COUNT):
+        aug_data = color_pca.modify_clusters(image_data, pixel_cluster_map, cluster_count, [size], 0)
+        aug_data = (aug_data * 255).astype(np.uint8).reshape((size[1], size[0], 3))
+        aug_images.append(Image.fromarray(aug_data))
+    
+    return aug_images, cluster_count
 
-            cluster_count = int(max(node_cluster_map)) + 1  # Berechnung der Anzahl der Cluster
+@st.cache_resource
+def create_plot(all_images):
+    fig, axs = plt.subplots(2, len(all_images), figsize=(15, 6))
+    for idx, img in enumerate(all_images):
+        rgb_image = img.convert("RGB")
+        width, height = img.size
+        points = np.array([
+            (r, g, b, r, g, b)
+            for x in range(width)
+            for y in range(height)
+            for (r, g, b) in [rgb_image.getpixel((x, y))]
+        ])
+        axs[0, idx].scatter(points[:, 1], points[:, 2], c=points[:, 3:6] / 255, s=1)
+        axs[0, idx].set_xlim(0, 255)
+        axs[0, idx].set_ylim(0, 255)
+        axs[0, idx].set_aspect('equal', 'box')
+        axs[0, idx].set_title("Original" if idx == 0 else f"Aug {idx}")
+        axs[1, idx].imshow(img)
+        axs[1, idx].axis("off")
+    fig.tight_layout()
+    return fig        
 
-            # Anzeige der Cluster-Informationen
-            st.write(f"Anzahl der Cluster: {cluster_count}")
+def fig_to_png(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    buf.seek(0)
+    return buf
 
-            # Spalten für das Layout, erstes Bild ist das Original, der Rest die augmentierten Bilder
-            cols = st.columns(constants.AUG_COUNT + 1)  # Eine zusätzliche Spalte für das Originalbild -> nicht mehr nötig, ist ein Überbleibsel aus streamlit_app_fancy_dbl_gng.py
+# --- Hauptverarbeitung ---
+if st.session_state.uploaded_files:
+    for uploaded_file in st.session_state.uploaded_files:
+        filename = uploaded_file.name
 
-            # Liste, um das Originalbild und die augmentierten Bilder zu speichern
-            all_images = [image]
+        # Falls bereits berechnet, überspringen
+        if filename not in st.session_state.image_results:
+            with st.spinner(f"Verarbeite {filename} ..."):
+                image = Image.open(uploaded_file).convert("RGB")
+                image_array = np.asarray(image)
+                data_array = image_array.reshape(-1, 3) / constants.MAX_COLOR_VALUE
 
-            # Augmentierungen durchführen
-            for aug_count in trange(constants.AUG_COUNT): # Fortschrittsbalken für Augmentierungen
-                try:
-                    # Augmentierung der Daten mit den Clusterfarben 
-                    # [image.size] ist das gleiche wie size_images aus parser.py; data_array ist das gleiche wie data[data_index] aus fancy_pca/dbl_gng_runner.py
-                    aug_data = color_pca.modify_clusters(data_array, pixel_cluster_map, cluster_count, [image.size], 0)
-                    aug_data = (aug_data * 255).astype(np.uint8)  # Umwandlung in uint8
+                aug_images, cluster_count = generate_augmentations(data_array, image.size)
+                st.session_state.image_results[filename] = {
+                    "original": image,
+                    "aug_images": aug_images,
+                    "cluster_count": cluster_count,
+                    "data_shape": data_array.shape,
+                }
 
-                    # Rückwandlung in die ursprüngliche Bildform: Höhe x Breite x 3
-                    aug_data = aug_data.reshape((image.size[1], image.size[0], 3))
+        # --- Anzeige ---
+        info = st.session_state.image_results[filename]
+        st.divider()
+        st.subheader(f"📸 {filename}")
+        st.write(f"**Bildgröße:** {info['original'].size}")
+        st.write(f"**Bildarray-Form:** {info['data_shape']}")
+        st.write(f"**Anzahl der Cluster:** {info['cluster_count']}")
 
-                    # Erstellen des augmentierten Bildes
-                    aug_image = Image.fromarray(aug_data)
-
-                    # Das augmentierte Bild in der Liste speichern
-                    all_images.append(aug_image)
-                    aug_output_images.append(aug_image.convert("RGB"))
-
-                except Exception as e:
-                    st.write(f"Fehler bei der Augmentierung: {e}")  # Debugging
-
-            # Visualisierung der 2D-Punktewolke für das Originalbild und die augmentierten Bilder
-            st.subheader("Visualisierung der 2D-Punktwolke")
-
-            fig, axs = plt.subplots(2, len(all_images), figsize=(15, 6))
-
-            # Originalbild & 2D-Punktewolke (PCA oder Fancy PCA) für das Originalbild
-            # Konvertiere das Originalbild in eine 2D-Punktwolke
-            rgb_image = all_images[0].convert("RGB")
-            width, height = all_images[0].size
-            points = []
-            for x in range(width):
-                for y in range(height):
-                    r, g, b = rgb_image.getpixel((x, y))
-                    points.append((r, g, b, r, g, b))  # RGB-Werte als Koordinaten und Farben verwenden
-            points = np.array(points)
-            # points[:, 1]: zweite Spalte (x-Achse-Werte - Grün), points[:, 2]: dritte Spalte (y-Achse-Werte - Blau), c=points[:, 3:6] / 255: Farbwerte auf [0,1] normalisiert
-            axs[0, 0].scatter(points[:, 1], points[:, 2], c=points[:, 3:6] / 255, s=1)
-            axs[0, 0].set_title("Originalbild")
-            axs[0, 0].set_xlabel("G")
-            axs[0, 0].set_ylabel("B")
-            axs[0, 0].set_xlim(0, 255)
-            axs[0, 0].set_ylim(0, 255)
-            axs[0, 0].set_aspect('equal', 'box')
-            axs[1, 0].imshow(all_images[0])
-            axs[1, 0].axis("off")
-
-            # Augmentierte Bilder & 2D-Punktwolke für jedes augmentierte Bild
-            for idx, aug_image in enumerate(all_images[1:], start=1):
-                rgb_image = aug_image.convert("RGB")
-                width, height = aug_image.size
-                points = []
-                for x in range(width):
-                    for y in range(height):
-                        r, g, b = rgb_image.getpixel((x, y))
-                        points.append((r, g, b, r, g, b))  # RGB-Werte als Koordinaten und Farben verwenden
-                points = np.array(points)
-
-                axs[0, idx].scatter(points[:, 1], points[:, 2], c=points[:, 3:6] / 255, s=1)
-                axs[0, idx].set_title(f"Augmentation {idx}")
-                axs[0, idx].set_xlabel("G")
-                axs[0, idx].set_ylabel("B")
-                axs[0, idx].set_xlim(0, 255)
-                axs[0, idx].set_ylim(0, 255)
-                axs[0, idx].set_aspect('equal', 'box')
-                axs[1, idx].imshow(aug_image)
-                axs[1, idx].axis("off")
-
-            plt.tight_layout()
-            st.pyplot(fig)
-            st.divider()
-        if aug_output_images and len(aug_output_images) == constants.AUG_COUNT * len(uploaded_files):
-            zip_buffer = io.BytesIO()
-            name_index = 0
-            with zipfile.ZipFile(zip_buffer, "w") as zipf:
-                for i,img in enumerate(aug_output_images):
-                    #img = Image.open(file)
-                    if i % constants.AUG_COUNT == 0 and not i == 0:
-                        print(name_index)
-                        name_index += 1
-                    base_name = uploaded_files[name_index].name.rsplit('.', 1)[0]
-                    file_name = f"{base_name}_aug_{i % constants.AUG_COUNT}" + constants.FILE_TYPE 
-                    buf = io.BytesIO()
-                    img.save(buf, format="JPEG")
-                    zipf.writestr(file_name, buf.getvalue())
-                  
-            st.download_button(
-                label="Downlaod augmented images as a zip file" ,
-                data=zip_buffer.getvalue(),
-                file_name="augmented_images.zip",
-                mime="application/zip"
-            )
+        # --- Punktwolke & Augmentierungen anzeigen ---
+        if filename not in st.session_state.fig:
+            print("New")
+            st.session_state.fig[filename] = create_plot([info["original"]] + info["aug_images"])
+            png_buf = fig_to_png(st.session_state.fig[filename])
+            st.session_state.fig_png[filename] = png_buf.getvalue()
+       
+        st.image(st.session_state.fig_png[filename])
         
-    except Exception as e:
-        st.write(f"Fehler beim Öffnen des Bildes: {e}") # Debugging
+
+
+
+
+# --- Download-Bereich ---
+if st.session_state.image_results:
+    st.divider()
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zipf:
+        for filename, info in st.session_state.image_results.items():
+            base_name = filename.rsplit('.', 1)[0]
+            for i, img in enumerate(info["aug_images"]):
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG")
+                zipf.writestr(f"{base_name}_aug_{i+1}.jpg", buf.getvalue())
+
+    st.download_button(
+        label="⬇️ Augmentierte Bilder als ZIP herunterladen",
+        data=zip_buffer.getvalue(),
+        file_name="augmented_images.zip",
+        mime="application/zip",
+    )
+
+
+# --- Reset ---
+if st.button("🔄 Reset"):
+    st.session_state.clear()
+    st.experimental_rerun()
