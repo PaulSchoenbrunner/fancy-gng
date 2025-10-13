@@ -12,22 +12,26 @@ import datetime
 
 
 
+def init_session():
+    # Session-States initialisieren
+    if "uploaded_files" not in st.session_state:
+        st.session_state.uploaded_files = None
+    if "image_results" not in st.session_state:
+        st.session_state.image_results = {}  # {filename: {"original": Image, "aug_images": [...], "cluster_count": int, "data_shape": tuple}}
+    if "fig" not in st.session_state:
+        st.session_state.fig = {}
+    if "fig_png" not in st.session_state:
+        st.session_state.fig_png = {}
+    if "done" not in st.session_state:
+        st.session_state.done = False
+    if "last_picture" not in st.session_state:
+        st.session_state.last_picture = None
 
-# Session-States initialisieren
-if "uploaded_files" not in st.session_state:
-    st.session_state.uploaded_files = None
-if "image_results" not in st.session_state:
-    st.session_state.image_results = {}  # {filename: {"original": Image, "aug_images": [...], "cluster_count": int, "data_shape": tuple}}
-if "fig" not in st.session_state:
-    st.session_state.fig = {}
-if "fig_png" not in st.session_state:
-    st.session_state.fig_png = {}
-if "done" not in st.session_state:
-    st.session_state.done = False
-
+init_session()
 
 def reset_session():
     st.session_state.clear()
+    init_session()
 
 def reset_for_new_run():
     st.session_state.image_results = {}
@@ -56,9 +60,20 @@ if input_option == "Datei-Upload":
 elif input_option == "Kamera":
     camera_image = st.camera_input("Bild aufnehmen")
     if camera_image is not None:
+
+        if st.session_state.last_picture is None:
+            reset_session()
+
+        elif st.session_state.last_picture is not None and camera_image.getvalue() != st.session_state.last_picture:
+            reset_session()
+            
         timestamp = datetime.datetime.now().strftime("%Y%m%d")
-        camera_image.name = f"camera_{timestamp}.jpg"
+        camera_image.name = f"camera_{timestamp}.jpg"        
         st.session_state.uploaded_files = [camera_image]
+        st.session_state.last_picture = camera_image.getvalue()      
+        
+       
+        
 
 
 
@@ -136,7 +151,7 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
         filename = uploaded_file.name
 
         # Falls bereits berechnet, überspringen
-        if filename not in st.session_state.image_results:
+        if filename not in st.session_state.image_results and start_augmentation:
             with st.spinner(f"Verarbeite {filename} ..."):
                 image = Image.open(uploaded_file).convert("RGB")
                 image_array = np.asarray(image)
