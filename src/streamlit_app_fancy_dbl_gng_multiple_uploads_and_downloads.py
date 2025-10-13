@@ -8,11 +8,12 @@ from tqdm import trange
 from PIL import Image
 import matplotlib.pyplot as plt
 import io, zipfile
+import datetime
 
 
-#st.set_page_config(page_title="DBL-GNG Image Augmentation", layout="wide")
 
-# --- Session-States initialisieren ---
+
+# Session-States initialisieren
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = None
 if "image_results" not in st.session_state:
@@ -24,6 +25,7 @@ if "fig_png" not in st.session_state:
 if "done" not in st.session_state:
     st.session_state.done = False
 
+
 def reset_session():
     st.session_state.clear()
 
@@ -32,12 +34,12 @@ def reset_for_new_run():
     st.session_state.fig = {}
     st.session_state.fig_png = {}
     
-# --- Streamlit UI ---
+# Streamlit UI
 st.title("🧠 DBL-GNG Image Augmentation")
 st.write("Lade ein oder mehrere Bilder hoch oder nimm eines mit der Kamera auf.")
 
 
-# --- Eingabeoption ---
+# Eingabeoption
 input_option = st.radio("Bildquelle auswählen:", ["Datei-Upload", "Kamera"])
 
 if input_option == "Datei-Upload":
@@ -47,18 +49,25 @@ if input_option == "Datei-Upload":
         accept_multiple_files=True,
         on_change= reset_session
     )
-elif input_option == "Kamera":
-    uploaded_files = st.camera_input("Bild aufnehmen")
 
-if uploaded_files:
-    st.session_state.uploaded_files = uploaded_files
+    if uploaded_files:
+        st.session_state.uploaded_files = uploaded_files
+
+elif input_option == "Kamera":
+    camera_image = st.camera_input("Bild aufnehmen")
+    if camera_image is not None:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d")
+        camera_image.name = f"camera_{timestamp}.jpg"
+        st.session_state.uploaded_files = [camera_image]
+
+
 
 start_augmentation = st.button("🚀 Starte Augmentierung")
 
 if start_augmentation and st.session_state.done:
     reset_for_new_run()
 
-def generate_augmentations(image_data, size):
+def generate_augmentations(image_data):
     """Führt den gesamten DBL-GNG + Clustering + Augmentierungsprozess durch."""
     gng = dbl_gng.DBL_GNG(3, constants.MAX_NODES)
     gng.initializeDistributedNode(image_data, constants.SARTING_NODES)
@@ -121,7 +130,7 @@ def fig_to_png(fig):
     buf.seek(0)
     return buf
 
-# --- Hauptverarbeitung ---
+# Hauptverarbeitung
 if (start_augmentation or st.session_state.done) and st.session_state.uploaded_files:
     for uploaded_file in st.session_state.uploaded_files:
         filename = uploaded_file.name
@@ -133,7 +142,7 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
                 image_array = np.asarray(image)
                 data_array = image_array.reshape(-1, 3) / constants.MAX_COLOR_VALUE
 
-                aug_images, cluster_count = generate_augmentations(data_array, image.size)
+                aug_images, cluster_count = generate_augmentations(data_array)
                 st.session_state.image_results[filename] = {
                     "original": image,
                     "aug_images": aug_images,
@@ -141,7 +150,7 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
                     "data_shape": data_array.shape,
                 }
 
-        # --- Anzeige ---
+        # Anzeige
         info = st.session_state.image_results[filename]
         st.divider()
         st.subheader(f"📸 {filename}")
@@ -149,7 +158,7 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
         st.write(f"**Bildarray-Form:** {info['data_shape']}")
         st.write(f"**Anzahl der Cluster:** {info['cluster_count']}")
 
-        # --- Punktwolke & Augmentierungen anzeigen ---
+        # Punktwolke & Augmentierungen anzeigen
         if filename not in st.session_state.fig:
             print("New")
             st.session_state.fig[filename] = create_plot([info["original"]] + info["aug_images"])
@@ -163,7 +172,7 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
 
 
 
-# --- Download-Bereich ---
+# Download-Bereich
 if st.session_state.image_results:
     st.divider()
     zip_buffer = io.BytesIO()
