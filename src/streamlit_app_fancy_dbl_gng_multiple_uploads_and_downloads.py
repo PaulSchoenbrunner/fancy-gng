@@ -9,6 +9,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import io, zipfile
 import datetime
+import fancy_pca as FP
 
 FANCYGNG_STR = "FancyGNG"
 FANCYPCA_STR = "FancyPCA"
@@ -46,7 +47,6 @@ st.write("Lade ein oder mehrere Bilder hoch oder nimm eines mit der Kamera auf."
 
 
 # Eingabeoption
-
 aug_option = st.selectbox(
     "Wähle das Augmentationsverfahren:",
     [FANCYGNG_STR, FANCYPCA_STR, COLORJITTER_STR],
@@ -92,17 +92,53 @@ start_augmentation = st.button("🚀 Starte Augmentierung")
 if start_augmentation and st.session_state.done:
     reset_for_new_run()
 
-
-def fancy_gng():
-    aug_images, cluster_count = generate_fancy_gng_augmentations(data_array)
+def fancy_pca(image_data, original_iamge):
+    aug_images = generate_fancy_pca_augmentations(image_data)
     st.session_state.image_results[filename] = {
-                   "original": image,
+                   "original": original_iamge,
                    "aug_images": aug_images,
-                   "cluster_count": cluster_count,
-                   "data_shape": data_array.shape,
+                   "data_shape": image_data.shape,
     }
 
-def show_fancy_gng_info():
+
+
+def generate_fancy_pca_augmentations(image_data):
+    fancy_pca_transform = FP.FancyPCA()
+    aug_images = []
+    for _ in range(constants.AUG_COUNT):
+         # Wendet Fancy PCA auf das Bild an (Kopie wird verwendet, um Original nicht zu überschreiben, so wie bei fancy_pca_runner.py)
+        fancy_pca_image = fancy_pca_transform.fancy_pca(image_data.copy())
+        # Umwandlung auf den Bereich [0, 255] und zu uint8
+        fancy_pca_image = (fancy_pca_image * 255).astype(np.uint8)
+        # Rückumwandlung in die ursprüngliche Bildform: Höhe x Breite x 3
+        height, width, channels = image.size[1], image.size[0], 3
+        fancy_pca_image = fancy_pca_image.reshape((height, width, channels))
+        try:
+            aug_image = Image.fromarray(fancy_pca_image)
+            aug_images.append(aug_image)
+        except Exception as e:
+            st.write(f"Fehler bei der Bildumwandlung: {e}")  ### Debugging ###
+
+    return aug_images
+
+def show_fancy_pca_info(filename, info):
+    st.divider()
+    st.subheader(f"📸 {filename}")
+    st.write(f"**Bildgröße:** {info['original'].size}")
+    st.write(f"**Bildarray-Form:** {info['data_shape']}")
+
+
+def fancy_gng(image_data, original_image):
+    aug_images, cluster_count = generate_fancy_gng_augmentations(image_data)
+    st.session_state.image_results[filename] = {
+                   "original": original_image,
+                   "aug_images": aug_images,
+                   "cluster_count": cluster_count,
+                   "data_shape": image_data.shape,
+    }
+
+
+def show_fancy_gng_info(filename, info):
     st.divider()
     st.subheader(f"📸 {filename}")
     st.write(f"**Bildgröße:** {info['original'].size}")
@@ -179,6 +215,7 @@ def fig_to_png(fig):
 
 
 
+
 # Hauptverarbeitung
 if (start_augmentation or st.session_state.done) and st.session_state.uploaded_files:
     for uploaded_file in st.session_state.uploaded_files:
@@ -192,20 +229,26 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
                 data_array = image_array.reshape(-1, 3) / constants.MAX_COLOR_VALUE
 
                 if aug_option == FANCYGNG_STR:
-                    fancy_gng()
+                    fancy_gng(data_array, image)
+                
+                elif aug_option == FANCYPCA_STR:
+                    fancy_pca(data_array, image)
 
         # Anzeige
         info = st.session_state.image_results[filename]
         if aug_option == FANCYGNG_STR:
-            show_fancy_gng_info()
+            show_fancy_gng_info(filename, info)
+        
+        elif aug_option == FANCYPCA_STR:
+            show_fancy_pca_info(filename, info)
             
 
         # Punktwolke & Augmentierungen anzeigen
         if filename not in st.session_state.fig:
-            print("New")
-            st.session_state.fig[filename] = create_plot([info["original"]] + info["aug_images"])
-            png_buf = fig_to_png(st.session_state.fig[filename])
-            st.session_state.fig_png[filename] = png_buf.getvalue()
+            with st.spinner(f"Augementation von {filename} abgeschlossen..Starte Visualisierung"):
+                st.session_state.fig[filename] = create_plot([info["original"]] + info["aug_images"])
+                png_buf = fig_to_png(st.session_state.fig[filename])
+                st.session_state.fig_png[filename] = png_buf.getvalue()
        
         st.image(st.session_state.fig_png[filename])
     st.session_state.done = True
@@ -224,7 +267,7 @@ if st.session_state.image_results:
             for i, img in enumerate(info["aug_images"]):
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG")
-                zipf.writestr(f"{base_name}_aug_{i+1}.jpg", buf.getvalue())
+                zipf.writestr(f"{base_name}_aug_{aug_option}_{i+1}.jpg", buf.getvalue())
 
     st.download_button(
         label="⬇️ Augmentierte Bilder als ZIP herunterladen",
