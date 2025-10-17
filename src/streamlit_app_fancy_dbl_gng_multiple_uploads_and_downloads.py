@@ -91,6 +91,7 @@ show_point_cloud = st.checkbox("Zeige die Punktwolke")
 
 start_augmentation = st.button("🚀 Starte Augmentierung")
 
+
 if start_augmentation and st.session_state.done:
     reset_for_new_run()
 
@@ -223,11 +224,19 @@ def fig_to_png(fig):
     return buf
 
 
+def keep_dependent_ui_element_when_button_pressed(dependency, dependency_func_map : dict):
+    if dependency is not None: 
+        entry = dependency_func_map.get(dependency)
+        if entry and len(entry) > 0:
+            func = entry[0]
+            args = entry[1:]
+            return func(*args)  
 
 
 
 
 show_fancy_pca_info_bool = (aug_option == FANCYPCA_STR and start_augmentation) or (aug_option == FANCYGNG_STR and st.session_state.last_aug == FANCYPCA_STR and not start_augmentation)
+#show_fancy_gng_info_bool = (aug_option == FANCYGNG_STR and st.session_state.last_aug is None) or (st.session_state.last_aug == FANCYGNG_STR and start_augmentation)
 show_fancy_gng_info_bool = (aug_option == FANCYGNG_STR and start_augmentation) or (aug_option == FANCYPCA_STR and st.session_state.last_aug == FANCYGNG_STR and not start_augmentation)
 
 # Hauptverarbeitung
@@ -252,6 +261,7 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
 
         # Anzeige
         info = st.session_state.image_results[filename]
+       
         if show_fancy_gng_info_bool:
             show_fancy_gng_info(filename, info)
            
@@ -259,7 +269,11 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
         elif show_fancy_pca_info_bool:
             show_fancy_pca_info(filename, info)
         
-            
+        else:
+           keep_dependent_ui_element_when_button_pressed(st.session_state.last_aug, {FANCYPCA_STR: [show_fancy_pca_info, filename, info], 
+                                                                                FANCYGNG_STR: [show_fancy_gng_info, filename, info]} ) 
+        
+       
 
         # Punktwolke & Augmentierungen anzeigen
         if show_point_cloud:
@@ -295,11 +309,14 @@ if st.session_state.image_results:
                 img.save(buf, format="JPEG")
                 zipf.writestr(f"{base_name}_aug_{aug_option}_{i+1}.jpg", buf.getvalue())
 
-    st.download_button(
+    download = st.download_button(
         label="⬇️ Augmentierte Bilder als ZIP herunterladen",
         data=zip_buffer.getvalue(),
         file_name="augmented_images.zip",
         mime="application/zip",
     )
+
+    
+
 
 
