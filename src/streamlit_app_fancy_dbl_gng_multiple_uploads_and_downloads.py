@@ -29,6 +29,8 @@ def init_session():
         st.session_state.done = False
     if "last_picture" not in st.session_state:
         st.session_state.last_picture = None
+    if "last_aug" not in st.session_state:
+        st.session_state.last_aug = None
 
 init_session()
 
@@ -85,7 +87,7 @@ elif input_option == "Kamera":
        
         
 
-
+show_point_cloud = st.checkbox("Zeige die Punktwolke")
 
 start_augmentation = st.button("🚀 Starte Augmentierung")
 
@@ -201,7 +203,18 @@ def create_plot(all_images):
         axs[1, idx].imshow(img)
         axs[1, idx].axis("off")
     fig.tight_layout()
-    return fig        
+    return fig
+
+
+def cerate_simple_plot(all_images):
+    fig, axs = plt.subplots(1, len(all_images), figsize=(15, 6))
+    for idx, img in enumerate(all_images):
+        axs[idx].set_title("Original" if idx == 0 else f"Aug {idx}")
+        axs[idx].imshow(img)
+        axs[idx].axis("off")
+    fig.tight_layout()
+    return fig    
+
 
 def fig_to_png(fig):
     buf = io.BytesIO()
@@ -214,7 +227,8 @@ def fig_to_png(fig):
 
 
 
-
+show_fancy_pca_info_bool = (aug_option == FANCYPCA_STR and start_augmentation) or (aug_option == FANCYGNG_STR and st.session_state.last_aug == FANCYPCA_STR and not start_augmentation)
+show_fancy_gng_info_bool = (aug_option == FANCYGNG_STR and start_augmentation) or (aug_option == FANCYPCA_STR and st.session_state.last_aug == FANCYGNG_STR and not start_augmentation)
 
 # Hauptverarbeitung
 if (start_augmentation or st.session_state.done) and st.session_state.uploaded_files:
@@ -223,6 +237,7 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
 
         # Falls bereits berechnet, überspringen
         if filename not in st.session_state.image_results and start_augmentation:
+            st.session_state.last_aug = aug_option
             with st.spinner(f"Verarbeite {filename} ..."):
                 image = Image.open(uploaded_file).convert("RGB")
                 image_array = np.asarray(image)
@@ -233,23 +248,34 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
                 
                 elif aug_option == FANCYPCA_STR:
                     fancy_pca(data_array, image)
+                
 
         # Anzeige
         info = st.session_state.image_results[filename]
-        if aug_option == FANCYGNG_STR:
+        if show_fancy_gng_info_bool:
             show_fancy_gng_info(filename, info)
+           
         
-        elif aug_option == FANCYPCA_STR:
+        elif show_fancy_pca_info_bool:
             show_fancy_pca_info(filename, info)
+        
             
 
         # Punktwolke & Augmentierungen anzeigen
-        if filename not in st.session_state.fig:
-            with st.spinner(f"Augementation von {filename} abgeschlossen..Starte Visualisierung"):
-                st.session_state.fig[filename] = create_plot([info["original"]] + info["aug_images"])
+        if show_point_cloud:
+            if filename not in st.session_state.fig:
+                with st.spinner(f"Augementation von {filename} abgeschlossen...Starte Visualisierung der Punktwolke"):
+                    st.session_state.fig[filename] = create_plot([info["original"]] + info["aug_images"])
+                    png_buf = fig_to_png(st.session_state.fig[filename])
+                    st.session_state.fig_png[filename] = png_buf.getvalue()
+
+            
+        else:
+            if filename not in st.session_state.fig:
+                st.session_state.fig[filename] = cerate_simple_plot([info["original"]] + info["aug_images"])
                 png_buf = fig_to_png(st.session_state.fig[filename])
                 st.session_state.fig_png[filename] = png_buf.getvalue()
-       
+
         st.image(st.session_state.fig_png[filename])
     st.session_state.done = True
         
