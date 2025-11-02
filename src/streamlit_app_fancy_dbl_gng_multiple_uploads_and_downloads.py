@@ -18,6 +18,7 @@ FANCYGNG_STR = "FancyGNG"
 FANCYPCA_STR = "FancyPCA"
 COLORJITTER_STR = "Color-Jitter"
 MAX_UI_AUG_COUNT = 10
+MAX_UI_AUG_COUNT += 1
 
 
 #-----------------------------Session------------------------------------------------------------
@@ -289,7 +290,8 @@ def show_color_jitter_info(filename, info):
 
 #-----------------------------Plotting----------------------------------------------
 def create_point_cloud(all_images, axs, row_idx = 0):
-    for idx, img in enumerate(all_images):
+    images = all_images if len(all_images) < MAX_UI_AUG_COUNT else all_images[:MAX_UI_AUG_COUNT]
+    for idx, img in enumerate(images):
         ax = get_fig_ax(axs, row_idx, idx)
         if len(ax.images) == 0 and len(ax.collections) == 0:  # nur wenn Achse leer
             rgb_image = img.convert("RGB")
@@ -308,8 +310,9 @@ def create_point_cloud(all_images, axs, row_idx = 0):
         
 
 def create_gray_images(all_images, axs, row_idx = 0):
+    images = all_images if len(all_images) < MAX_UI_AUG_COUNT else all_images[:MAX_UI_AUG_COUNT]
     grayscale_transform = transforms.Grayscale()
-    for idx, img in enumerate(all_images):
+    for idx, img in enumerate(images):
         ax = get_fig_ax(axs, row_idx, idx)
         if len(ax.images) == 0 and len(ax.collections) == 0:
             gray = grayscale_transform(img)
@@ -319,7 +322,8 @@ def create_gray_images(all_images, axs, row_idx = 0):
 
 
 def create_main_plot(all_images, axs, row_idx = 0):
-    for idx, img in enumerate(all_images):
+    images = all_images if len(all_images) < MAX_UI_AUG_COUNT else all_images[:MAX_UI_AUG_COUNT]
+    for idx, img in enumerate(images):
         ax = get_fig_ax(axs, row_idx, idx)
         if len(ax.images) == 0 and len(ax.collections) == 0:  
             ax.imshow(img)
@@ -407,8 +411,8 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
         with st.spinner(f"Augementation von {filename} abgeschlossen...Starte Visualisierung"):
             if filename not in st.session_state.fig_png:
                 ax_counter = sum(1 for opt in option_buttons if opt) + 1
-
-                fig, axs = plt.subplots(ax_counter, constants.AUG_COUNT + 1, figsize=(15, 6))
+                cols = constants.AUG_COUNT + 1 if constants.AUG_COUNT <= MAX_UI_AUG_COUNT else MAX_UI_AUG_COUNT
+                fig, axs = plt.subplots(ax_counter, cols, figsize=(15, 6))
 
 
                 current_row = 0
