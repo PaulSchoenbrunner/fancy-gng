@@ -116,6 +116,7 @@ st.sidebar.header("⚙️ Parameter-Einstellungen")
 
 # Allgemeine Parameter (für alle Methoden)
 st.sidebar.subheader("Allgemein")
+AUG_COUNT = 5
 AUG_COUNT = st.sidebar.number_input("Anzahl der Augmentationen", min_value=1, max_value=100,  value=getattr(constants, "AUG_COUNT", 3))
 
 # Dynamische Sektionen je nach ausgewählter Methode
@@ -139,6 +140,11 @@ elif aug_option == FANCYGNG_STR:
     STANDARD_DEVIATION = st.sidebar.slider("Standard Abweichung", 1, 10, getattr(constants, "FANCY_PCA_STANDARD_DEVIATION", 20))
     MEAN = st.sidebar.slider("Mittelwert", 0, 10, getattr(constants, "FANCY_PCA_MEAN", 3))  
     USE_SMOOTH = st.sidebar.checkbox("Nutze Glättung", value=True)
+    if USE_SMOOTH:
+        SIGMA = st.sidebar.slider("Glättung/Sigma", 0, 10, getattr(constants, "SIGMA", 3))
+        constants.SIGMA = SIGMA
+    
+    
     constants.FANCY_PCA_STANDARD_DEVIATION = STANDARD_DEVIATION
     constants.FANCY_PCA_MEAN = MEAN
     constants.USE_SMOOTH = USE_SMOOTH
@@ -411,7 +417,7 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
         with st.spinner(f"Augementation von {filename} abgeschlossen...Starte Visualisierung"):
             if filename not in st.session_state.fig_png:
                 ax_counter = sum(1 for opt in option_buttons if opt) + 1
-                cols = constants.AUG_COUNT + 1 if constants.AUG_COUNT <= MAX_UI_AUG_COUNT else MAX_UI_AUG_COUNT
+                cols = constants.AUG_COUNT + 1 if constants.AUG_COUNT < MAX_UI_AUG_COUNT else MAX_UI_AUG_COUNT
                 fig, axs = plt.subplots(ax_counter, cols, figsize=(15, 6))
 
 
