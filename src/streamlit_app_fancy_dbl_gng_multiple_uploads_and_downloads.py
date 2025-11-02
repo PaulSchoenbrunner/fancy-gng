@@ -109,11 +109,50 @@ if start_augmentation and st.session_state.done:
     reset_for_new_run()
 
 
+#----------------------------Sidebar für Parameter---------------------------------
+st.sidebar.header("⚙️ Parameter-Einstellungen")
+
+# Allgemeine Parameter (für alle Methoden)
+st.sidebar.subheader("Allgemein")
+AUG_COUNT = st.sidebar.number_input("Anzahl der Augmentationen", min_value=1, max_value=100,  value=getattr(constants, "AUG_COUNT", 3))
+
+# Dynamische Sektionen je nach ausgewählter Methode
+if aug_option == COLORJITTER_STR:
+    st.sidebar.subheader("🧮 Color Jitter Parameter")
+    BRIGHTNESS = st.sidebar.slider("Helligkeit", 0.0, 2.0, getattr(constants, "BRIGHTNESS", 0.5))
+    CONTRAST = st.sidebar.slider("Kontrast", 0.0, 2.0, getattr(constants, "CONTRAST", 0.5))
+    SATURATION = st.sidebar.slider("Sättigung", 0.0, 2.0, getattr(constants, "SATURATION", 0.5))
+    HUE = st.sidebar.slider("Farbton", 0.0, 0.5, getattr(constants, "HUE", 0.1))
+
+    # Werte übernehmen
+    constants.BRIGHTNESS = BRIGHTNESS
+    constants.CONTRAST = CONTRAST
+    constants.SATURATION = SATURATION
+    constants.HUE = HUE
+    
+    
+
+elif aug_option == FANCYGNG_STR:
+    st.sidebar.subheader("🧮 Fancy GNG Parameter")
+    STANDARD_DEVIATION = st.sidebar.slider("Standard Abweichung", 1, 100, getattr(constants, "FANCY_PCA_STANDARD_DEVIATION", 20))
+    MEAN = st.sidebar.slider("Mittelwert", 2, 10, getattr(constants, "FANCY_PCA_MEAN", 3))  
+    SIGMA = st.sidebar.slider("Glätung/Sigma", 0, 8, getattr(constants, "SIGMA", 3))  
+    constants.FANCY_PCA_STANDARD_DEVIATION = STANDARD_DEVIATION
+    constants.FANCY_PCA_MEAN = MEAN
+    constants.SIGMA = SIGMA
+    
 
 
+elif aug_option == FANCYPCA_STR:
+    st.sidebar.subheader("🧮 Fancy PCA Parameter")
+    STANDARD_DEVIATION = st.sidebar.slider("Standard Abweichung", 1, 100, getattr(constants, "FANCY_PCA_STANDARD_DEVIATION", 20))
+    MEAN = st.sidebar.slider("Mittelwert", 2, 10, getattr(constants, "FANCY_PCA_MEAN", 3))  
+    constants.FANCY_PCA_STANDARD_DEVIATION = STANDARD_DEVIATION
+    constants.FANCY_PCA_MEAN = MEAN
+    
+constants.AUG_COUNT = AUG_COUNT
 
-
-
+print(constants.FANCY_PCA_STANDARD_DEVIATION, constants.FANCY_PCA_MEAN, constants.SIGMA)
 #-----------------------------------FancyPCA------------------------------------------
 def fancy_pca(image_data, original_iamge):
     aug_images = generate_fancy_pca_augmentations(image_data)
