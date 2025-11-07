@@ -5,13 +5,14 @@ import dbl_gng
 import clustering
 import color_pca
 from tqdm import trange
-from PIL import Image
+from PIL import Image, ImageDraw
 from torchvision import transforms
 import matplotlib.pyplot as plt
 import io, zipfile
 import datetime
 import fancy_pca as FP
 import random
+
 
 
 #----------------------------UI Constants-------------------------------------------------------
@@ -100,16 +101,21 @@ elif input_option == "Kamera":
         st.session_state.last_picture = camera_image.getvalue()      
         
        
-        
+option_buttons = []     
 #Punktwolke anzeigen
 show_point_cloud = st.checkbox("Zeige die Punktwolke")
 
-#Punktwolke anzeigen
+#gray scale anzeigen
 show_gray_scale = st.checkbox("Generiere zusätzlich eine Gray-Scale Version")
 
-option_buttons = []
+#Pcluster
+if aug_option == FANCYGNG_STR:
+    show_cluster = st.checkbox("Genereiere eine Pixel Clustermap")
+    option_buttons.append(show_cluster)
+
 option_buttons.append(show_point_cloud)
 option_buttons.append(show_gray_scale)
+
 #Augmentation starten
 start_augmentation = st.button("🚀 Starte Augmentierung")
 if start_augmentation and st.session_state.done:
@@ -213,12 +219,13 @@ def show_fancy_pca_info(filename, info):
 
 #-------------------------------------FancyGNG---------------------------------------------
 def fancy_gng(image_data, original_image):
-    aug_images, cluster_count = generate_fancy_gng_augmentations(image_data)
+    aug_images, cluster_count, pixel_cluster_map = generate_fancy_gng_augmentations(image_data)
     st.session_state.image_results[filename] = {
-                   "original": original_image,
-                   "aug_images": aug_images,
-                   "cluster_count": cluster_count,
-                   "data_shape": image_data.shape,
+                    "original": original_image,
+                    "aug_images": aug_images,
+                    "cluster_count": cluster_count,
+                    "data_shape": image_data.shape,
+                    "pixel_cluster_map": pixel_cluster_map
     }
 
 
@@ -264,7 +271,7 @@ def generate_fancy_gng_augmentations(image_data):
         # Erstellen des augmentierten Bildes
         aug_image = Image.fromarray(aug_data)
         aug_images.append(aug_image)
-    return aug_images, cluster_count
+    return aug_images, cluster_count, pixel_cluster_map
 
 
 
@@ -353,6 +360,28 @@ def create_gray_images(all_images, axs, row_idx = 0):
         for img in all_images[MAX_UI_AUG_COUNT:]:
             gray = grayscale_transform(img)
             st.session_state.gray_images[filename]["images"].append(gray)
+
+def create_cluster_image(all_images, axs, row_idx = 0):
+    images = all_images if len(all_images) <= MAX_UI_AUG_COUNT else all_images[:MAX_UI_AUG_COUNT]
+    for idx, img in enumerate(images):
+        draw = None
+        ax = get_fig_ax(axs, row_idx, idx)
+        if len(ax.images) == 0 and len(ax.collections) == 0:
+            width, height = img.size  # Eine Zeile mit der Länge der Daten
+            image = Image.new("RGB", (width, height))
+            draw = ImageDraw.Draw(image)
+            tmp_width, tmp_height = 0, 0
+            cluster = info['pixel_cluster_map']
+            for group in cluster:
+                color = constants.get_color(int(group))
+                draw.point((tmp_width, tmp_height), fill=color)
+                if(tmp_width == width):
+                    tmp_height += 1
+                    tmp_width = 0
+                tmp_width += 1 
+            ax.imshow(image)
+            ax.axis("off")
+    
 
 def create_main_plot(all_images, axs, row_idx = 0):
     images = all_images if len(all_images) < MAX_UI_AUG_COUNT else all_images[:MAX_UI_AUG_COUNT]
@@ -457,6 +486,10 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
                 #Gray scal ebild generieren
                 if show_gray_scale:
                     create_gray_images([info["original"]] + info["aug_images"], axs, current_row)
+                    current_row += 1
+
+                if show_cluster:
+                    create_cluster_image([info["original"]] + info["aug_images"], axs, current_row)
                     current_row += 1
                 #main fig
                 create_main_plot([info["original"]] + info["aug_images"], axs, current_row)
