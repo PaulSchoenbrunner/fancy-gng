@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import io, zipfile
 import datetime
 import fancy_pca as FP
+import random
 
 
 #----------------------------UI Constants-------------------------------------------------------
@@ -19,6 +20,7 @@ FANCYPCA_STR = "FancyPCA"
 COLORJITTER_STR = "Color-Jitter"
 MAX_UI_AUG_COUNT = 10
 MAX_UI_AUG_COUNT += 1
+CLOUD_SIZE = 20000
 
 
 #-----------------------------Session------------------------------------------------------------
@@ -160,7 +162,12 @@ elif aug_option == FANCYPCA_STR:
     MEAN = st.sidebar.slider("Mittelwert", 0, 10, getattr(constants, "FANCY_PCA_MEAN", 3))  
     constants.FANCY_PCA_STANDARD_DEVIATION = STANDARD_DEVIATION
     constants.FANCY_PCA_MEAN = MEAN
-    
+
+if show_point_cloud:
+    st.sidebar.subheader("☁️ Größe der Punktwolke")
+    CLOUD_SIZE = st.sidebar.number_input("Anzahl der Punkte", 1000, 1000000, CLOUD_SIZE)
+    use_original_size = st.sidebar.checkbox("Use Image original size")
+
 constants.AUG_COUNT = AUG_COUNT
 
 print(constants.FANCY_PCA_STANDARD_DEVIATION, constants.FANCY_PCA_MEAN, constants.USE_SMOOTH)
@@ -305,12 +312,22 @@ def create_point_cloud(all_images, axs, row_idx = 0):
         if len(ax.images) == 0 and len(ax.collections) == 0:  # nur wenn Achse leer
             rgb_image = img.convert("RGB")
             width, height = img.size
+            
             points = np.array([
-                (r, g, b, r, g, b)
-                for x in range(width)
-                for y in range(height)
-                for (r, g, b) in [rgb_image.getpixel((x, y))]
-            ])
+                 (r, g, b, r, g, b)
+                 for x in range(width)
+                 for y in range(height)
+                 for (r, g, b) in [rgb_image.getpixel((x, y))]
+             ])
+
+             # 🔹 Zufällig 20 000 Punkte auswählen (oder alle, falls weniger)
+            if len(points) > CLOUD_SIZE and not use_original_size:
+                print("capped point cloud")
+                indices = np.random.choice(len(points), CLOUD_SIZE, replace=False)
+                points = points[indices]
+
+            # Punkte definieren (r,g,b -> als Farbe)
+            #points = np.column_stack((pixels, pixels))  # (r,g,b,r,g,b)
             ax.scatter(points[:, 1], points[:, 2], c=points[:, 3:6] / 255, s=1)
             ax.set_xlim(0, 255)
             ax.set_ylim(0, 255)
