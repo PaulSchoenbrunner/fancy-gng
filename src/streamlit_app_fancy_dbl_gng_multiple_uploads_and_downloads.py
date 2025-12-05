@@ -67,27 +67,32 @@ st.write("Upload one or more images or take one with your camera.")
 aug_option = st.selectbox(
     "Select the augmentation methode:",
     [FANCYGNG_STR, FANCYPCA_STR, COLORJITTER_STR],
-    index=0
+    index=0,
+    help="Dies ist ein Tooltip, der beim Hover angezeigt wird."
 )
 st.write(f"Method chosen: {aug_option}")
 
 
 # Quelle wählen
-input_option = st.radio("Select image source:", ["File upload", "Camera"])
+input_option = st.radio("Select image source:", ["File upload", "Camera"],
+                help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
 
 if input_option == "File upload":
     uploaded_files = st.file_uploader(
         "Select images", 
         type=["jpg", "jpeg", "png"], 
         accept_multiple_files=True,
-        on_change= reset_session
+        on_change= reset_session,
+        help="Dies ist ein Tooltip, der beim Hover angezeigt wird."
     )
 
     if uploaded_files:
         st.session_state.uploaded_files = uploaded_files
 
 elif input_option == "Camera":
-    camera_image = st.camera_input("Take a picture")
+    camera_image = st.camera_input("Take a picture",
+    help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
+
     if camera_image is not None:
 
         if st.session_state.last_picture is None:
@@ -104,21 +109,25 @@ elif input_option == "Camera":
        
 option_buttons_ui = []     
 #Punktwolke anzeigen
-show_point_cloud = st.checkbox("Show the point cloud")
+show_point_cloud = st.checkbox("Show the point cloud",
+                    help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
 
 #gray scale anzeigen
-show_gray_scale = st.checkbox("Additionally generate a grayscale version")
+show_gray_scale = st.checkbox("Additionally generate a grayscale version",
+                    help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
 
 
 show_cluster = False
 reduced_fancy_gng = False
 #cluster
 if aug_option == FANCYGNG_STR:
-    show_cluster = st.checkbox("Generate a pixel cluster map")
+    show_cluster = st.checkbox("Generate a pixel cluster map",
+                    help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
     option_buttons_ui.append(show_cluster)
     
     #Reduziertes Fancy-GNG
-    reduced_fancy_gng = st.checkbox("Train Fancy-GNG on fewer data points")
+    reduced_fancy_gng = st.checkbox("Train Fancy-GNG on fewer data points",
+                    help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
     
 
 
@@ -133,20 +142,26 @@ if start_augmentation and st.session_state.done:
 
 
 #----------------------------Sidebar für Parameter---------------------------------
-st.sidebar.header("⚙️ Parameter settings")
+st.sidebar.header("⚙️ Parameter settings",
+                    help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
 
 # Allgemeine Parameter (für alle Methoden)
 st.sidebar.subheader("General")
 AUG_COUNT = 5
-AUG_COUNT = st.sidebar.number_input("Number of augmentations", min_value=1, max_value=100,  value=getattr(constants, "AUG_COUNT", 3))
+AUG_COUNT = st.sidebar.number_input("Number of augmentations", min_value=1, max_value=100,  value=getattr(constants, "AUG_COUNT", 3),
+                                    help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
 
 # Dynamische Sektionen je nach ausgewählter Methode
 if aug_option == COLORJITTER_STR:
     st.sidebar.subheader("🧮 Color-Jitter parameter")
-    BRIGHTNESS = st.sidebar.slider("Brightness", 0.0, 2.0, getattr(constants, "BRIGHTNESS", 0.5))
-    CONTRAST = st.sidebar.slider("Contrast", 0.0, 2.0, getattr(constants, "CONTRAST", 0.5))
-    SATURATION = st.sidebar.slider("Saturation", 0.0, 2.0, getattr(constants, "SATURATION", 0.5))
-    HUE = st.sidebar.slider("Hue", 0.0, 0.5, getattr(constants, "HUE", 0.1))
+    BRIGHTNESS = st.sidebar.slider("Brightness", 0.0, 2.0, getattr(constants, "BRIGHTNESS", 0.5),
+                help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
+    CONTRAST = st.sidebar.slider("Contrast", 0.0, 2.0, getattr(constants, "CONTRAST", 0.5),
+                help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
+    SATURATION = st.sidebar.slider("Saturation", 0.0, 2.0, getattr(constants, "SATURATION", 0.5),
+                help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
+    HUE = st.sidebar.slider("Hue", 0.0, 0.5, getattr(constants, "HUE", 0.1),
+                help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
 
     # Werte übernehmen
     constants.BRIGHTNESS = BRIGHTNESS
@@ -158,8 +173,10 @@ if aug_option == COLORJITTER_STR:
 
 elif aug_option == FANCYGNG_STR:
     st.sidebar.subheader("🧮 Fancy-GNG parameter")
-    STANDARD_DEVIATION = st.sidebar.slider("Standard deviation", 1, 10, getattr(constants, "FANCY_PCA_STANDARD_DEVIATION", 20))
-    MEAN = st.sidebar.slider("Mean", 0, 10, getattr(constants, "FANCY_PCA_MEAN", 3))  
+    STANDARD_DEVIATION = st.sidebar.slider("Standard deviation", 1, 10, getattr(constants, "FANCY_PCA_STANDARD_DEVIATION", 20),
+                    help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
+    MEAN = st.sidebar.slider("Mean", 0, 10, getattr(constants, "FANCY_PCA_MEAN", 3),
+                    help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")  
     #USE_SMOOTH = st.sidebar.checkbox("Use smoothing", value=False)
     #if USE_SMOOTH:
     #    SIGMA = st.sidebar.slider("Smoothing/Sigma", 0, 10, getattr(constants, "SIGMA", 3))
@@ -174,19 +191,24 @@ elif aug_option == FANCYGNG_STR:
 
 elif aug_option == FANCYPCA_STR:
     st.sidebar.subheader("🧮 Fancy-PCA parameter")
-    STANDARD_DEVIATION = st.sidebar.slider("Standard deviation", 0, 10, getattr(constants, "FANCY_PCA_STANDARD_DEVIATION", 20))
-    MEAN = st.sidebar.slider("Mean", 0, 10, getattr(constants, "FANCY_PCA_MEAN", 3))  
+    STANDARD_DEVIATION = st.sidebar.slider("Standard deviation", 0, 10, getattr(constants, "FANCY_PCA_STANDARD_DEVIATION", 20),
+                        help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
+    MEAN = st.sidebar.slider("Mean", 0, 10, getattr(constants, "FANCY_PCA_MEAN", 3),
+                        help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")  
     constants.FANCY_PCA_STANDARD_DEVIATION = STANDARD_DEVIATION
     constants.FANCY_PCA_MEAN = MEAN
 
 if show_point_cloud:
     st.sidebar.subheader("☁️ Size of the point cloud")
-    CLOUD_SIZE = st.sidebar.number_input("Number of points", 100, 1000000, CLOUD_SIZE)
-    use_original_size = st.sidebar.checkbox("Use original image size")
+    CLOUD_SIZE = st.sidebar.number_input("Number of points", 100, 1000000, CLOUD_SIZE,
+                help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
+    use_original_size = st.sidebar.checkbox("Use original image size",
+                help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
     
 if reduced_fancy_gng and aug_option == FANCYGNG_STR:
     st.sidebar.subheader("Number of pixels used for Fancy-GNG training")
-    REDUCED_TRAINING = st.sidebar.number_input("Number of pixels", 100, 1000000, REDUCED_TRAINING)
+    REDUCED_TRAINING = st.sidebar.number_input("Number of pixels", 100, 1000000, REDUCED_TRAINING,
+                help="Dies ist ein Tooltip, der beim Hover angezeigt wird.")
     
 
 constants.AUG_COUNT = AUG_COUNT
