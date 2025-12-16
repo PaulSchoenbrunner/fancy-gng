@@ -1,4 +1,4 @@
-# fancy-gng-streamlit
+# Fancy GNG
 
 ## Overview
 
