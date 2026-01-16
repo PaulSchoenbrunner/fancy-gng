@@ -23,6 +23,8 @@ COLORJITTER_STR = "Color-Jitter"
 MAX_UI_AUG_COUNT = 10
 MAX_UI_AUG_COUNT += 1
 CLOUD_SIZE = 5000
+CLUSTER_CLOUD_SIZE = 5000
+
 REDUCED_TRAINING = 5000
 
 
@@ -149,6 +151,17 @@ if figures:
     option_buttons_ui.append(show_point_cloud)
 
 
+show_cluster_cloud = False
+if figures:
+    show_cluster_cloud = st.checkbox("Show the cluster cloud",
+                        help="This option generates a point cloud representation of each image's pixels in the G-B color space. " \
+                        "Each point represents one pixel of the image. The position of the points is based on the green and blue values (x=G, y=B). " \
+                        "Every point is colored in their corresponding cluster group color. " \
+                        "The result is a 2D visual representation of the color distribution of an image.")   
+    option_buttons_ui.append(show_cluster_cloud)
+
+
+
 option_buttons_ui.append(show_gray_scale)
 
 
@@ -226,6 +239,15 @@ if show_point_cloud:
                 "However, any other number smaller than the total number of pixels can also be selected. ")
     use_original_size = st.sidebar.checkbox("Use original image size",
                 help="Use all pixels of the image to generate the point cloud. This may take some time for larger images.")
+    
+if show_cluster_cloud:
+    st.sidebar.subheader("☁️ Size of the cluster cloud")
+    CLUSTER_CLOUD_SIZE = st.sidebar.number_input("Number of points", 100, 1000000, CLOUD_SIZE,
+                help="By default, 5000 random pixels from the image are selected for displaying the cluster cloud. " \
+                "This helps to generate the cluster cloud faster and save computing power. " \
+                "However, any other number smaller than the total number of pixels can also be selected. ")
+    use_original_size_cluster = st.sidebar.checkbox("Use original image size",
+                help="Use all pixels of the image to generate the cluster cloud. This may take some time for larger images.")
     
 if reduced_fancy_gng and aug_option == FANCYGNG_STR:
     st.sidebar.subheader("Number of pixels used for Fancy-GNG training")
@@ -387,7 +409,7 @@ def create_point_cloud(all_images, axs, row_idx = 0):
             width, height = img.size
             
             points = np.array([
-                 (r, g, b, r, g, b)
+                 (r, g, b)
                  for x in range(width)
                  for y in range(height)
                  for (r, g, b) in [rgb_image.getpixel((x, y))]
@@ -400,14 +422,48 @@ def create_point_cloud(all_images, axs, row_idx = 0):
                 points = points[indices]
 
             # Define points (r,g,b -> as color)
-            ax.scatter(points[:, 1], points[:, 2], c=points[:, 3:6] / 255, s=3)
+            ax.scatter(points[:, 1], points[:, 2], c=points[:, 0:3] / 255, s=3)
             ax.set_xlim(0, 255)
             ax.set_ylim(0, 255)
             ax.set_xticks(range(0, 256, 100))  
             ax.set_yticks(range(0, 256, 100)) 
             ax.set_aspect('equal', 'box')
+
+def create_cluster_cloud(all_images, axs, row_idx = 0):
+    images = all_images if len(all_images) < MAX_UI_AUG_COUNT else all_images[:MAX_UI_AUG_COUNT]
+    cluster = info['pixel_cluster_map']
+    for idx, img in enumerate(images):
+        ax = get_fig_ax(axs, row_idx, idx)
+
+        ax.tick_params(width=3, labelsize=30)
         
-        
+        if len(ax.images) == 0 and len(ax.collections) == 0:  # only at empty axes
+            rgb_image = img.convert("RGB")
+            width, height = img.size
+            
+            points = np.empty((width * height, 2), dtype=np.uint8)
+            k = 0
+            for y in range(height):
+                for x in range(width):
+                    _, g, b = rgb_image.getpixel((x, y))
+                    points[k] = (g, b)
+                    k += 1
+     
+            colors = np.array(
+                [constants.get_color(int(c)) for c in cluster],dtype=np.float32
+            ) / 255.0
+
+            if len(points) > CLUSTER_CLOUD_SIZE and not use_original_size_cluster:
+                #print("Capped point cloud")
+                indices = np.random.choice(len(points), CLUSTER_CLOUD_SIZE, replace=False)
+                points = points[indices]
+                colors = colors[indices]
+
+            # Define points (r,g,b -> as color)
+            ax.scatter(points[:, 0], points[:, 1], c=colors, s=3)
+            ax.set_xlim(0, 255)
+            ax.set_ylim(0, 255)
+            ax.set_aspect("equal", "box")
 
 def create_gray_images(all_images, axs, row_idx = 0):
     images = all_images if len(all_images) <= MAX_UI_AUG_COUNT else all_images[:MAX_UI_AUG_COUNT]
@@ -571,13 +627,19 @@ if (start_augmentation or st.session_state.done) and st.session_state.uploaded_f
                 if show_point_cloud and figures:
                     create_point_cloud([info["original"]] + info["aug_images"], axs, current_row)
                     current_row += 1
+
+
+                if show_cluster_cloud and figures:
+                    create_cluster_cloud([info["original"]] + info["aug_images"], axs, current_row)
+                    current_row += 1
+
                 #Generate grayscale image
                 if show_gray_scale:
                     create_gray_images([info["original"]] + info["aug_images"], axs, current_row)
                 
                 if show_cluster and figures:
                     create_cluster_image([info["original"]] + info["aug_images"], cluster_ax)
-                    
+                
                 if figures:   
                     fig.subplots_adjust(wspace=0.3, hspace=0.05)   
                     png_buf = fig_to_png(fig)
