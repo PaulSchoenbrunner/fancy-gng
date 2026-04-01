@@ -247,15 +247,15 @@ elif aug_option == FANCYGNG_STR:
                     step=0.25,
                     help="Sets the average shift along the color PCA. Affects how much colors are changed on average.")
      
-    #USE_SMOOTH = st.sidebar.checkbox("Use smoothing", value=False)
-    #if USE_SMOOTH:
-    #    SIGMA = st.sidebar.slider("Smoothing/Sigma", 0, 10, getattr(constants, "SIGMA", 3))
-    #    constants.SIGMA = SIGMA
+    USE_SMOOTH = st.sidebar.checkbox("Smoothing", value=True, help="Use gaussian smoothing between clusters")
+    if USE_SMOOTH:
+       SIGMA = st.sidebar.slider("Smoothing/Sigma", 0, 10, getattr(constants, "SIGMA", 3))
+       constants.SIGMA = SIGMA
     
     #Set values 
     constants.FANCY_PCA_STANDARD_DEVIATION = STANDARD_DEVIATION
     constants.FANCY_PCA_MEAN = MEAN
-    #constants.USE_SMOOTH = USE_SMOOTH
+    constants.USE_SMOOTH = USE_SMOOTH
     
 # Special fancy pca parameter 
 elif aug_option == FANCYPCA_STR:
@@ -484,7 +484,9 @@ def show_color_jitter_info(filename, info):
     st.write(f"**Image size:** {info['original'].size}")
     st.write(f"**Image array shape:** {info['data_shape']}")
     st.write(f"**Parameter:** {info['parameter']}")
-    #-----------------------------Plotting----------------------------------------------
+
+
+#-----------------------------Plotting----------------------------------------------
 
 #Create point cloud figure 
 #Parameter: all_images -> Array of original image & augmentated images, axs -> fig axes , row_idx -> figure row of visualization
